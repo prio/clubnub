@@ -27,9 +27,9 @@
   (fn [type & more] type))
 
 (defmethod get-url-parts :publish [type config channel msg]
-  (let [{:keys [pub-key sub-key secret-key]} config]
-    (filterv #(not (nil? %))
-            ["publish" pub-key sub-key secret-key channel "0" (json/generate-string msg)])))
+  (let [{:keys [pub-key sub-key secret-key]} config
+        secret (or secret-key "0")]
+    ["publish" pub-key sub-key secret channel "0" (json/generate-string msg)]))
 
 (defmethod get-url-parts :subscribe [type config channel timetoken]
   ["subscribe" (:sub-key config) channel "0" timetoken])
@@ -47,38 +47,28 @@
               (string/join "/")))))
 
 
-(defn- build-subscribe-uri
-  ([config channel]
-     (build-subscribe-uri config channel 0))
-  ([config channel timetoken]
-     (build-url :subscribe config channel timetoken)))
-
-
-(defn- build-publish-uri [config channel message]
-  (build-url :publish config channel message))
-
-
 (defn publish [config channel message]
   "Publishes the supplied message to the specified chanel.
    Config must contain at least a :pub-key and a :sub-key"
   ({:pre [(string? channel)
           (every? config [:pub-key :sub-key])]}
-   (let [uri (build-publish-uri config channel message)]
+   (let [uri (build-url :publish config channel message)]
      (http/get uri))))
 
 
-(defn poll
+(defn- poll
   "Connects to pubnub with the specified configuration and
    returns all the new messages sent on the channel since
    timetoken"
   ([config channel]
      (poll config channel 0))
   ([config channel timetoken]
-     (let [uri (build-subscribe-uri config channel timetoken)]
+     (let [uri (build-url :subscribe config channel timetoken)]
        (try
          (json/parse-string (:body (http/get uri)) keyword)
          (catch SocketException e
            [[] timetoken])))))
+
 
 (defn subscribe
   "Subscribes to the spcified pubnub channel and returns a
